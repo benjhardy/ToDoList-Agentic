@@ -2,12 +2,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 import json
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import requests
 import math
 import threading
 import time
 from typing import Dict, List, Optional
+import calendar
 
 
 class DarkTheme:
@@ -21,9 +22,11 @@ class DarkTheme:
     ACCENT = "#4a9eff"
     ACCENT_HOVER = "#6bb6ff"
     SUCCESS = "#4caf50"
+    SUCCESS_BRIGHT = "#66bb6a"
     WARNING = "#ff9800"
     ERROR = "#f44336"
     BORDER = "#555555"
+    COMPLETION_FLASH = "#ffd700"  # Gold color for completion flash
 
 
 class DataManager:
@@ -328,6 +331,187 @@ class AnalogClock:
         self.canvas.after(1000, self.update_clock)
 
 
+class CalendarWidget:
+    """Custom calendar widget for date selection"""
+    
+    def __init__(self, parent, callback=None, current_date=None):
+        self.parent = parent
+        self.callback = callback
+        self.current_date = current_date or date.today()
+        self.selected_date = self.current_date
+        self.viewing_date = date(self.current_date.year, self.current_date.month, 1)
+        
+        # Main calendar frame
+        self.frame = tk.Frame(parent, bg=DarkTheme.BG_SECONDARY, relief="solid", bd=1)
+        
+        self.setup_calendar()
+        self.render_calendar()
+    
+    def setup_calendar(self):
+        """Setup the calendar interface"""
+        # Header with month/year navigation
+        header_frame = tk.Frame(self.frame, bg=DarkTheme.BG_SECONDARY)
+        header_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Previous month button
+        self.prev_btn = tk.Button(
+            header_frame,
+            text="◀",
+            command=self.prev_month,
+            bg=DarkTheme.BG_TERTIARY,
+            fg=DarkTheme.FG_PRIMARY,
+            font=("Arial", 10),
+            relief="flat",
+            cursor="hand2",
+            width=3
+        )
+        self.prev_btn.pack(side=tk.LEFT)
+        
+        # Month/Year label
+        self.month_label = tk.Label(
+            header_frame,
+            text="",
+            font=("Arial", 12, "bold"),
+            bg=DarkTheme.BG_SECONDARY,
+            fg=DarkTheme.FG_PRIMARY
+        )
+        self.month_label.pack(side=tk.LEFT, expand=True)
+        
+        # Next month button
+        self.next_btn = tk.Button(
+            header_frame,
+            text="▶",
+            command=self.next_month,
+            bg=DarkTheme.BG_TERTIARY,
+            fg=DarkTheme.FG_PRIMARY,
+            font=("Arial", 10),
+            relief="flat",
+            cursor="hand2",
+            width=3
+        )
+        self.next_btn.pack(side=tk.RIGHT)
+        
+        # Days of week header
+        days_frame = tk.Frame(self.frame, bg=DarkTheme.BG_SECONDARY)
+        days_frame.pack(fill=tk.X, padx=5)
+        
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        for day in days:
+            day_label = tk.Label(
+                days_frame,
+                text=day,
+                font=("Arial", 9, "bold"),
+                bg=DarkTheme.BG_SECONDARY,
+                fg=DarkTheme.FG_MUTED,
+                width=4
+            )
+            day_label.pack(side=tk.LEFT, padx=1)
+        
+        # Calendar grid
+        self.calendar_frame = tk.Frame(self.frame, bg=DarkTheme.BG_SECONDARY)
+        self.calendar_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+    
+    def prev_month(self):
+        """Go to previous month"""
+        if self.viewing_date.month == 1:
+            self.viewing_date = date(self.viewing_date.year - 1, 12, 1)
+        else:
+            self.viewing_date = date(self.viewing_date.year, self.viewing_date.month - 1, 1)
+        self.render_calendar()
+    
+    def next_month(self):
+        """Go to next month"""
+        if self.viewing_date.month == 12:
+            self.viewing_date = date(self.viewing_date.year + 1, 1, 1)
+        else:
+            self.viewing_date = date(self.viewing_date.year, self.viewing_date.month + 1, 1)
+        self.render_calendar()
+    
+    def date_selected(self, selected_date):
+        """Handle date selection"""
+        self.selected_date = selected_date
+        if self.callback:
+            self.callback(selected_date)
+        self.render_calendar()
+    
+    def render_calendar(self):
+        """Render the calendar grid"""
+        # Clear existing calendar
+        for widget in self.calendar_frame.winfo_children():
+            widget.destroy()
+        
+        # Update month label
+        month_year = self.viewing_date.strftime("%B %Y")
+        self.month_label.config(text=month_year)
+        
+        # Get calendar data
+        cal = calendar.monthcalendar(self.viewing_date.year, self.viewing_date.month)
+        
+        # Create date buttons
+        for week_num, week in enumerate(cal):
+            week_frame = tk.Frame(self.calendar_frame, bg=DarkTheme.BG_SECONDARY)
+            week_frame.pack(fill=tk.X)
+            
+            for day_num in week:
+                if day_num == 0:
+                    # Empty cell for days from other months
+                    empty_label = tk.Label(
+                        week_frame,
+                        text="",
+                        width=4,
+                        height=2,
+                        bg=DarkTheme.BG_SECONDARY
+                    )
+                    empty_label.pack(side=tk.LEFT, padx=1, pady=1)
+                else:
+                    # Create date for this day
+                    day_date = date(self.viewing_date.year, self.viewing_date.month, day_num)
+                    
+                    # Determine button style
+                    is_today = day_date == date.today()
+                    is_selected = day_date == self.selected_date
+                    is_current_month = day_date.month == self.viewing_date.month
+                    
+                    if is_selected:
+                        bg_color = DarkTheme.ACCENT
+                        fg_color = DarkTheme.FG_PRIMARY
+                        font_weight = "bold"
+                    elif is_today:
+                        bg_color = DarkTheme.SUCCESS
+                        fg_color = DarkTheme.FG_PRIMARY
+                        font_weight = "bold"
+                    else:
+                        bg_color = DarkTheme.BG_TERTIARY
+                        fg_color = DarkTheme.FG_PRIMARY if is_current_month else DarkTheme.FG_MUTED
+                        font_weight = "normal"
+                    
+                    day_btn = tk.Button(
+                        week_frame,
+                        text=str(day_num),
+                        command=lambda d=day_date: self.date_selected(d),
+                        bg=bg_color,
+                        fg=fg_color,
+                        font=("Arial", 9, font_weight),
+                        relief="flat",
+                        cursor="hand2",
+                        width=4,
+                        height=2
+                    )
+                    day_btn.pack(side=tk.LEFT, padx=1, pady=1)
+                    
+                    # Hover effects
+                    def on_enter(event, btn=day_btn, orig_bg=bg_color):
+                        if not is_selected:
+                            btn.config(bg=DarkTheme.ACCENT_HOVER)
+                    
+                    def on_leave(event, btn=day_btn, orig_bg=bg_color):
+                        if not is_selected:
+                            btn.config(bg=orig_bg)
+                    
+                    day_btn.bind("<Enter>", on_enter)
+                    day_btn.bind("<Leave>", on_leave)
+
+
 class TodoTab:
     """Daily todo list tab"""
     
@@ -359,12 +543,16 @@ class TodoTab:
         header_frame = tk.Frame(self.left_frame, bg=DarkTheme.BG_PRIMARY)
         header_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Date navigation
+        # Date navigation with calendar
         nav_frame = tk.Frame(header_frame, bg=DarkTheme.BG_PRIMARY)
         nav_frame.pack(fill=tk.X)
         
+        # Quick navigation buttons
+        quick_nav_frame = tk.Frame(nav_frame, bg=DarkTheme.BG_PRIMARY)
+        quick_nav_frame.pack(side=tk.LEFT)
+        
         tk.Button(
-            nav_frame,
+            quick_nav_frame,
             text="◀",
             command=self.prev_day,
             bg=DarkTheme.BG_TERTIARY,
@@ -372,19 +560,10 @@ class TodoTab:
             font=("Arial", 12),
             relief="flat",
             cursor="hand2"
-        ).pack(side=tk.LEFT)
-        
-        self.date_label = tk.Label(
-            nav_frame,
-            text=self.current_date.strftime("%A, %B %d, %Y"),
-            font=("Arial", 16, "bold"),
-            bg=DarkTheme.BG_PRIMARY,
-            fg=DarkTheme.FG_PRIMARY
-        )
-        self.date_label.pack(side=tk.LEFT, padx=20)
+        ).pack(side=tk.LEFT, padx=(0, 5))
         
         tk.Button(
-            nav_frame,
+            quick_nav_frame,
             text="▶",
             command=self.next_day,
             bg=DarkTheme.BG_TERTIARY,
@@ -392,18 +571,59 @@ class TodoTab:
             font=("Arial", 12),
             relief="flat",
             cursor="hand2"
-        ).pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT, padx=(0, 10))
         
-        tk.Button(
-            nav_frame,
-            text="Today",
-            command=self.go_to_today,
+        # Date display with calendar toggle
+        date_frame = tk.Frame(nav_frame, bg=DarkTheme.BG_PRIMARY)
+        date_frame.pack(side=tk.LEFT, expand=True)
+        
+        self.date_label = tk.Label(
+            date_frame,
+            text=self.current_date.strftime("%A, %B %d, %Y"),
+            font=("Arial", 16, "bold"),
+            bg=DarkTheme.BG_PRIMARY,
+            fg=DarkTheme.FG_PRIMARY
+        )
+        self.date_label.pack()
+        
+        # Calendar toggle button
+        self.calendar_toggle_btn = tk.Button(
+            date_frame,
+            text="📅 Select Date",
+            command=self.toggle_calendar,
             bg=DarkTheme.ACCENT,
             fg=DarkTheme.FG_PRIMARY,
             font=("Arial", 10),
             relief="flat",
             cursor="hand2"
-        ).pack(side=tk.RIGHT)
+        )
+        self.calendar_toggle_btn.pack(pady=(5, 0))
+        
+        # Right side buttons
+        right_buttons_frame = tk.Frame(nav_frame, bg=DarkTheme.BG_PRIMARY)
+        right_buttons_frame.pack(side=tk.RIGHT)
+        
+        tk.Button(
+            right_buttons_frame,
+            text="Today",
+            command=self.go_to_today,
+            bg=DarkTheme.SUCCESS,
+            fg=DarkTheme.FG_PRIMARY,
+            font=("Arial", 10),
+            relief="flat",
+            cursor="hand2"
+        ).pack()
+        
+        # Calendar widget (initially hidden)
+        self.calendar_frame = tk.Frame(header_frame, bg=DarkTheme.BG_PRIMARY)
+        self.calendar_visible = False
+        
+        self.calendar_widget = CalendarWidget(
+            self.calendar_frame, 
+            callback=self.on_date_selected,
+            current_date=self.current_date
+        )
+        self.calendar_widget.frame.pack(pady=10)
         
         # Add new todo
         add_frame = tk.Frame(header_frame, bg=DarkTheme.BG_PRIMARY)
@@ -486,14 +706,12 @@ class TodoTab:
     
     def prev_day(self):
         """Go to previous day"""
-        from datetime import timedelta
         self.current_date -= timedelta(days=1)
         self.update_date_display()
         self.load_todos()
     
     def next_day(self):
         """Go to next day"""
-        from datetime import timedelta
         self.current_date += timedelta(days=1)
         self.update_date_display()
         self.load_todos()
@@ -507,6 +725,79 @@ class TodoTab:
     def update_date_display(self):
         """Update the date display"""
         self.date_label.config(text=self.current_date.strftime("%A, %B %d, %Y"))
+        # Update calendar widget's selected date
+        if hasattr(self, 'calendar_widget'):
+            self.calendar_widget.selected_date = self.current_date
+            self.calendar_widget.viewing_date = date(self.current_date.year, self.current_date.month, 1)
+            self.calendar_widget.render_calendar()
+    
+    def toggle_calendar(self):
+        """Toggle calendar visibility"""
+        if self.calendar_visible:
+            self.calendar_frame.pack_forget()
+            self.calendar_toggle_btn.config(text="📅 Select Date")
+            self.calendar_visible = False
+        else:
+            # Pack calendar after the navigation frame
+            nav_frame = self.calendar_toggle_btn.master.master
+            if nav_frame:
+                self.calendar_frame.pack(fill=tk.X, pady=(10, 0), after=nav_frame)
+            else:
+                self.calendar_frame.pack(fill=tk.X, pady=(10, 0))
+            self.calendar_toggle_btn.config(text="📅 Hide Calendar")
+            self.calendar_visible = True
+    
+    def on_date_selected(self, selected_date):
+        """Handle date selection from calendar"""
+        self.current_date = selected_date
+        self.update_date_display()
+        self.load_todos()
+        # Auto-hide calendar after selection
+        if self.calendar_visible:
+            self.toggle_calendar()
+    
+    def celebration_animation(self, widget, callback=None):
+        """Create a satisfying celebration animation when task is completed"""
+        original_bg = widget.cget("bg")
+        original_fg = widget.cget("fg")
+        
+        # Flash sequence with golden color
+        def flash_step(step=0, max_steps=6):
+            if step < max_steps:
+                if step % 2 == 0:
+                    # Flash to celebration color
+                    widget.config(
+                        bg=DarkTheme.COMPLETION_FLASH,
+                        fg=DarkTheme.BG_PRIMARY
+                    )
+                    # Scale effect (simulate with font size)
+                    current_font = widget.cget("font")
+                    if isinstance(current_font, str):
+                        font_parts = current_font.split()
+                        if len(font_parts) >= 2:
+                            size = int(font_parts[1]) if font_parts[1].isdigit() else 11
+                        else:
+                            size = 11
+                    else:
+                        size = current_font[1] if len(current_font) > 1 else 11
+                    
+                    widget.config(font=("Arial", size + 2, "bold"))
+                else:
+                    # Flash back to original
+                    widget.config(bg=original_bg, fg=original_fg)
+                    widget.config(font=("Arial", 11, "normal"))
+                
+                # Schedule next flash
+                widget.after(150, lambda: flash_step(step + 1, max_steps))
+            else:
+                # Animation complete - final state
+                widget.config(bg=original_bg, fg=original_fg)
+                widget.config(font=("Arial", 11, "overstrike"))
+                if callback:
+                    callback()
+        
+        # Start the animation
+        flash_step()
     
     def add_todo(self, event=None):
         """Add a new todo item"""
@@ -522,11 +813,23 @@ class TodoTab:
             self.render_todos()
             self.save_todos()
     
-    def toggle_todo(self, index):
-        """Toggle todo completion status"""
+    def toggle_todo(self, index, checkbox_widget=None):
+        """Toggle todo completion status with celebration animation"""
+        was_completed = self.todos[index]["completed"]
         self.todos[index]["completed"] = not self.todos[index]["completed"]
-        self.render_todos()
-        self.save_todos()
+        
+        # If task is being completed (not uncompleted), show celebration
+        if not was_completed and self.todos[index]["completed"] and checkbox_widget:
+            # Start celebration animation
+            def finish_toggle():
+                self.render_todos()
+                self.save_todos()
+            
+            self.celebration_animation(checkbox_widget, finish_toggle)
+        else:
+            # Normal toggle without animation
+            self.render_todos()
+            self.save_todos()
     
     def delete_todo(self, index):
         """Delete a todo item"""
@@ -560,18 +863,24 @@ class TodoTab:
             )
             todo_frame.pack(fill=tk.X, pady=2, padx=5)
             
-            # Checkbox
+            # Checkbox with animation support
+            checkbox_var = tk.BooleanVar(value=todo["completed"])
             checkbox = tk.Checkbutton(
                 todo_frame,
                 text=todo["text"],
-                variable=tk.BooleanVar(value=todo["completed"]),
-                command=lambda idx=i: self.toggle_todo(idx),
+                variable=checkbox_var,
                 bg=DarkTheme.BG_SECONDARY,
                 fg=DarkTheme.FG_PRIMARY if not todo["completed"] else DarkTheme.FG_MUTED,
                 selectcolor=DarkTheme.BG_TERTIARY,
                 font=("Arial", 11),
                 anchor="w"
             )
+            
+            # Custom command to pass the widget reference
+            def create_toggle_command(idx, widget):
+                return lambda: self.toggle_todo(idx, widget)
+            
+            checkbox.config(command=create_toggle_command(i, checkbox))
             checkbox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10, pady=10)
             
             # Strike through completed tasks
